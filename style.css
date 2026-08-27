@@ -1,0 +1,77 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #555555;
+  --link: #0b4f9c;
+  --border: #d8d8d8;
+  --accent-bg: #f4f6f8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171a;
+    --fg: #e8e8e8;
+    --muted: #a8adb2;
+    --link: #7fb2ff;
+    --border: #33373b;
+    --accent-bg: #1d2124;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.55;
+  margin: 0;
+  padding: 0;
+}
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--accent-bg);
+  color: var(--fg);
+  padding: 0.5rem 1rem;
+}
+.skip-link:focus { left: 0; z-index: 10; }
+.site-header {
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1.25rem;
+}
+.site-name a { font-weight: 700; text-decoration: none; color: var(--fg); }
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 4rem;
+}
+h1, h2, h3 { line-height: 1.25; }
+h1 { font-size: 1.7rem; margin-top: 0.5rem; }
+h2 { font-size: 1.3rem; margin-top: 2.2rem; border-top: 1px solid var(--border); padding-top: 1.2rem; }
+h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+h4 { font-size: 0.98rem; margin-top: 1.2rem; color: var(--muted); }
+a { color: var(--link); }
+p { margin: 0.8rem 0; }
+p.clause { margin-left: 1.5rem; }
+p.note, p.source-note, p.doc-meta { color: var(--muted); font-size: 0.92rem; }
+p.note { margin-left: 1.5rem; font-style: italic; }
+.doc-switch {
+  max-width: 46rem;
+  margin: 0.75rem auto 0;
+  padding: 0 1.25rem;
+}
+.doc-switch ul { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
+.toc {
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+}
+.toc-heading { margin: 0 0 0.5rem; border: none; padding: 0; font-size: 1rem; }
+.toc ul { columns: 1; margin: 0; padding-left: 1.1rem; }
+.toc li { break-inside: avoid; margin: 0.15rem 0; }
+.doc-list { list-style: none; padding: 0; }
+.doc-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+.citation { color: var(--muted); font-size: 0.9rem; }
+.site-footer { max-width: 46rem; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
