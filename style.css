@@ -45,16 +45,24 @@ main {
   margin: 0 auto;
   padding: 1.5rem 1.25rem 4rem;
 }
-h1, h2, h3 { line-height: 1.25; }
+h1, h2, h3, h4 { line-height: 1.25; }
 h1 { font-size: 1.7rem; margin-top: 0.5rem; }
 h2 { font-size: 1.3rem; margin-top: 2.2rem; border-top: 1px solid var(--border); padding-top: 1.2rem; }
 h3 { font-size: 1.05rem; margin-top: 1.4rem; }
 h4 { font-size: 0.98rem; margin-top: 1.2rem; color: var(--muted); }
 a { color: var(--link); }
 p { margin: 0.8rem 0; }
-p.clause { margin-left: 1.5rem; }
-p.note, p.source-note, p.doc-meta { color: var(--muted); font-size: 0.92rem; }
-p.note { margin-left: 1.5rem; font-style: italic; }
+p.lead { margin-top: 1rem; }
+p.clause-a { margin-left: 1.5rem; }
+p.clause-i { margin-left: 3rem; }
+p.clause-A { margin-left: 4.5rem; }
+p.def { margin-left: 1.5rem; font-style: italic; }
+p.note { margin-left: 1.5rem; color: var(--muted); font-size: 0.92rem; font-style: italic; }
+p.ref { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0.8rem; }
+p.amdt-act { font-weight: 600; margin-top: 1rem; }
+p.amdt-head { font-weight: 600; margin-top: 0.8rem; }
+p.amdt-detail, p.amdt-entry { color: var(--muted); font-size: 0.88rem; margin: 0.15rem 0 0.15rem 1.5rem; }
+p.source-note, p.doc-meta { color: var(--muted); font-size: 0.92rem; }
 .doc-switch {
   max-width: 46rem;
   margin: 0.75rem auto 0;
@@ -69,8 +77,8 @@ p.note { margin-left: 1.5rem; font-style: italic; }
   margin: 1.5rem 0;
 }
 .toc-heading { margin: 0 0 0.5rem; border: none; padding: 0; font-size: 1rem; }
-.toc ul { columns: 1; margin: 0; padding-left: 1.1rem; }
-.toc li { break-inside: avoid; margin: 0.15rem 0; }
+.toc ul { margin: 0; padding-left: 1.1rem; }
+.toc li { margin: 0.15rem 0; }
 .doc-list { list-style: none; padding: 0; }
 .doc-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
 .citation { color: var(--muted); font-size: 0.9rem; }

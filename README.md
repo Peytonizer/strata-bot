@@ -23,23 +23,31 @@ authorised legal copies — always confirm current provisions at the
 
 ## How it's built
 
-- `source-pdfs/` holds the original republished PDFs downloaded from the ACT
-  legislation register.
-- `scripts/build.py` extracts text from each PDF (via `pypdf`), strips the
-  repeated running header/footer boilerplate every page carries, reconstructs
-  headings (Part/Division/Subdivision/Schedule/numbered sections) and
-  paragraphs, and writes the HTML pages plus `index.html`/`style.css` to the
-  repo root.
+- `source-docs/` holds the Word (`.docx`) republication of each document,
+  downloaded from the ACT legislation register's "Download DOCX" link.
+- `scripts/build.py` reads each `.docx` with `python-docx` and maps its
+  named paragraph styles (`A H2 Part`, `A H5 Sec`, `Sch clause heading`,
+  `AmdtsEntries`, etc. — the ACT Parliamentary Counsel's Word template)
+  straight onto HTML headings and paragraph classes, then writes the HTML
+  pages plus `index.html`/`style.css` to the repo root.
 
-To regenerate (e.g. after ACT publishes a newer republication — swap the PDF
-in `source-pdfs/` first):
+The DOCX republication was used instead of the PDF (also available from the
+register) because its paragraphs already carry the real document structure:
+Part/Division/Schedule headings are distinct styles rather than text
+reprinted as a running page header, no heading text is wrapped across a
+page break, and Schedule content is tagged with its own styles so its
+independent clause numbering can't collide with the main numbering. The
+PDF's per-page header/footer boilerplate and line-wrapped headings would
+otherwise need to be reconstructed heuristically.
+
+To regenerate (e.g. after ACT publishes a newer republication — download the
+new DOCX into `source-docs/` first, keeping the same filename):
 
 ```
-pip install pypdf
+pip install python-docx
 python3 scripts/build.py
 ```
 
-The heading structure is derived heuristically from the PDF's own table of
-contents and text layout; the underlying legislative text itself is a direct
-extraction, but a small number of inline numbered examples may occasionally
-be mistagged as headings rather than body text.
+The script prints a warning listing any paragraph style it doesn't
+recognise, so a template change in a future republication won't be silently
+dropped.

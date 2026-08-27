@@ -1,352 +1,225 @@
 import re, html, os
-from pypdf import PdfReader
+import docx
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC_DIR = os.path.join(REPO_ROOT, "source-pdfs")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if "__file__" in dir() else "."
+SRC_DIR = os.path.join(REPO_ROOT, "source-docs")
 OUT_DIR = REPO_ROOT
 
-def pdf_to_text(path):
-    reader = PdfReader(path)
-    return "\n\n".join(page.extract_text() or "" for page in reader.pages)
-
 DOCS = [
-    {"pdf": "2001-16.PDF", "title": "Unit Titles Act 2001", "slug": "unit-titles-act-2001",
+    {"docx": "2001-16.docx", "title": "Unit Titles Act 2001", "slug": "unit-titles-act-2001",
      "citation": "A2001-16", "kind": "Act"},
-    {"pdf": "2001-58.PDF", "title": "Community Title Act 2001", "slug": "community-title-act-2001",
+    {"docx": "2001-58.docx", "title": "Community Title Act 2001", "slug": "community-title-act-2001",
      "citation": "A2001-58", "kind": "Act"},
-    {"pdf": "2011-39.PDF", "title": "Unit Titles (Management) Regulation 2011", "slug": "unit-titles-management-regulation-2011",
+    {"docx": "2011-39.docx", "title": "Unit Titles (Management) Regulation 2011", "slug": "unit-titles-management-regulation-2011",
      "citation": "SL2011-39", "kind": "Regulation"},
-    {"pdf": "2011-41.PDF", "title": "Unit Titles (Management) Act 2011", "slug": "unit-titles-management-act-2011",
+    {"docx": "2011-41.docx", "title": "Unit Titles (Management) Act 2011", "slug": "unit-titles-management-act-2011",
      "citation": "A2011-41", "kind": "Act"},
 ]
 
-DEFINITIVE_RE = [
-    re.compile(r'Authorised by the ACT Parliamentary Counsel'),
-    re.compile(r'^Effective:\s'),
-    re.compile(r'^R\d+$'),
-    re.compile(r'^\d{1,2}/\d{1,2}/\d{2,4}$'),
-    re.compile(r'^(page|contents)\s+\d+\b', re.I),
-]
+# ACT Parliamentary Counsel's Word template uses named paragraph styles that
+# directly encode document structure — no running headers/footers, no
+# line-wrapped headings, no sentence/heading ambiguity to guess at. This maps
+# every style seen across all 4 documents to how it should be handled.
 
-CANDIDATE_RE = re.compile(
-    r'^(Dictionary|Endnotes)$'
-    r'|Part\s+\d+[A-Za-z]*$'
-    r'|Division\s+\d+(\.\d+)?[A-Za-z]*$'
-    r'|Subdivision\s+\d+(\.\d+){1,2}[A-Za-z]*$'
-    r'|Schedule\s+\d+[A-Za-z]*$'
-    r'|^Section\s+\d+[A-Za-z]*$'
-)
+STRUCT_STYLES = {
+    # style name -> (html tag, id-kind)
+    "A H2 Part": ("h2", "part"),
+    "A H3 Div": ("h3", "div"),
+    "A H4 SubDiv": ("h4", "subdiv"),
+    "Sched-heading": ("h2", "sch"),
+    "Sched-Part": ("h3", "schpart"),
+    "Dict-Heading": ("h2", "fixed:dictionary"),
+    "Endnote1": ("h2", "fixed:endnotes"),
+    "Endnote2": ("h3", "endnote"),
+}
 
-# Titles always start with a capital letter; requiring that rules out
-# sentences that merely mention the Part/Division/Schedule mid-clause, e.g.
-# "Schedule 3 applies to general meetings ..." (a cross-reference, not a
-# heading — the giveaway is the lowercase verb straight after the number).
-PART_RE = re.compile(r'^Part\s+(\d+[A-Za-z]*)\s+([A-Z]\S*.*)$')
-# A schedule can contain its own "Part 1.1"-style sub-parts (e.g. two separate
-# codes of conduct in one schedule), each restarting clause numbering at 1.
-SCHEDULE_PART_RE = re.compile(r'^Part\s+(\d+\.\d+)\s+([A-Z]\S*.*)$')
-DIVISION_RE = re.compile(r'^Division\s+(\d+(?:\.\d+)?[A-Za-z]*)\s+([A-Z]\S*.*)$')
-SUBDIVISION_RE = re.compile(r'^Subdivision\s+(\d+(?:\.\d+){1,2}[A-Za-z]*)\s+([A-Z]\S*.*)$')
-SCHEDULE_RE = re.compile(r'^Schedule\s+(\d+[A-Za-z]*)\s+([A-Z]\S*.*)$')
-NUMBERED_SECTION_RE = re.compile(r'^(\d+[A-Z]{0,2}(?:\.\d+[A-Z]?)?)\s+([A-Z][^\n]{0,140})$')
-CLAUSE_RE = re.compile(r'^\(([a-zA-Z0-9]+)\)\s')
-NOTE_RE = re.compile(r'^(Note\b|Notes\b|Example\b|Examples\b)')
-# Inside "Endnotes", only these are real subsection headings — everything else
-# that looks like "<number> <Capitalised words>" there is actually a fragment
-# from the legislation/amendment-history tables (e.g. "1 July 2015").
-ENDNOTE_SUBSECTION_RE = re.compile(
-    r'^\d+\s+(About the endnotes|Abbreviation key|Legislation history|'
-    r'Amendment history|Earlier republications|'
-    r'Expired transitional or validating provisions)$'
-)
+SECTION_STYLES = {"A H5 Sec", "Sch clause heading"}
 
-def is_definitive(s, title):
-    if s == title:
+CSS_CLASS_BY_STYLE = {
+    "A main": "lead", "A main return": "lead", "Sch A main": "lead", "LongTitle": "lead",
+    "A para": "clause clause-a", "Sch A para": "clause clause-a",
+    "A subpara": "clause clause-i", "Sch A subpara": "clause clause-i",
+    "A subsubpara": "clause clause-A",
+    "aDef": "def", "aDef para": "def", "aDef subpara": "def",
+    "ref": "ref",
+    "Penalty": "clause clause-a",
+    "New Act": "amdt-act", "New Reg": "amdt-act",
+    "Act details": "amdt-detail", "As am by": "amdt-detail",
+    "AmdtsEntryHd": "amdt-head",
+    "AmdtsEntries": "amdt-entry", "AmdtsEntriesDefL2": "amdt-entry",
+    "EndNoteTextPub": "", "EndNoteTextEPS": "",
+    "Normal": "",
+    "Formula": "",
+}
+# Any style starting with these prefixes gets the given class.
+CSS_CLASS_PREFIX = {
+    "aNote": "note",
+    "aExam": "note",
+}
+
+# Styles that never contribute body content (front matter, table of
+# contents, empty structural bookmarks).
+SKIP_STYLES = {
+    "Billname", "Billname1", "BillBasic", "ActNo", "RepubNo", "EffectiveDate",
+    "CoverInForce", "CoverHeading", "CoverSubHdg", "CoverText", "CoverTextBullet",
+    "CoverActName", "N-TOCheading", "N-9pt", "PageBreak", "Placeholder",
+    "00SigningPage", "01Contents", "02Text", "03Schedule", "04Dictionary",
+    "05EndNote", "06Copyright", "N-line3",
+}
+
+def is_skippable(style_name, text):
+    if style_name.startswith("toc"):
         return True
-    for r in DEFINITIVE_RE:
-        if r.search(s):
-            return True
+    if style_name in SKIP_STYLES:
+        return True
+    if style_name == "Normal" and (text == "Australian Capital Territory" or text.startswith("©")):
+        return True
     return False
 
-def clean_lines(raw_text, title):
-    lines = raw_text.split("\n")
-    n = len(lines)
-    is_true = [False]*n
-    for i, l in enumerate(lines):
-        s = l.strip()
-        if s and is_definitive(s, title):
-            is_true[i] = True
+def slugify_num(num):
+    return re.sub(r'[.\s]+', '-', num)
 
-    def next_nonblank(i):
-        k = i+1
-        while k < n and lines[k].strip() == '':
-            k += 1
-        return k if k < n else None
+def split_num_title(text):
+    """Heading paragraphs are stored as '<number>\\t<title>'."""
+    if "\t" in text:
+        num, title = text.split("\t", 1)
+        return num.strip(), title.strip()
+    parts = text.split(None, 1)
+    if len(parts) == 2:
+        return parts[0], parts[1]
+    return text, ""
 
-    changed = True
-    rounds = 0
-    while changed and rounds < 20:
-        changed = False
-        rounds += 1
-        for i in range(n):
-            if is_true[i]:
-                continue
-            s = lines[i].strip()
-            if not s or not CANDIDATE_RE.search(s):
-                continue
-            k = next_nonblank(i)
-            if k is not None and is_true[k]:
-                is_true[i] = True
-                changed = True
+NUM_TAIL_RE = re.compile(r'(\d+(?:\.\d+)*[A-Za-z]*)$')
 
-    kept = [lines[i] for i in range(n) if not is_true[i]]
-    return "\n".join(kept)
+def bare_num(label):
+    """Part/Division/Subdivision/Schedule headings store the label word in
+    front of the number ('Division 3.2') — strip it for id-building."""
+    m = NUM_TAIL_RE.search(label)
+    return m.group(1) if m else label
 
-def find_nth_exact_line(text, marker, n_target):
-    pos = 0
-    count = 0
-    while True:
-        pos = text.find(marker, pos)
-        if pos == -1:
-            return -1
-        line_start = text.rfind("\n", 0, pos) + 1
-        line_end = text.find("\n", pos)
-        line = text[line_start:line_end if line_end != -1 else len(text)].strip()
-        if line == marker:
-            count += 1
-            if count == n_target:
-                return line_start
-        pos += len(marker)
+def extract_metadata(doc):
+    meta = {}
+    for p in doc.paragraphs:
+        t = p.text.strip()
+        if p.style.name == "RepubNo":
+            m = re.search(r'\d+', t)
+            if m:
+                meta["republication_no"] = m.group(0)
+        elif p.style.name == "EffectiveDate":
+            meta["effective"] = t.split(":", 1)[-1].strip().replace("\xa0", " ")
+        elif p.style.name == "CoverInForce" and t.lower().startswith("last amendment made by"):
+            meta["last_amendment"] = t.split("by", 1)[-1].strip()
+    return meta
 
-def extract_metadata(raw):
-    head = raw[:700]
-    def grab(pat):
-        m = re.search(pat, head)
-        return m.group(1).strip() if m else None
-    return {
-        "republication_no": grab(r'Republication No\s+(\d+)'),
-        "effective": grab(r'Effective:\s*([^\n]+)'),
-        "last_amendment": grab(r'Last amendment made by\s+([^\n]+)'),
-    }
-
-TOC_START_RE = re.compile(
-    r'^(Part\s+\d+[A-Za-z]*|Division\s+\d+(?:\.\d+)?[A-Za-z]*|Subdivision\s+\d+(?:\.\d+){1,2}[A-Za-z]*|Schedule\s+\d+[A-Za-z]*|Dictionary|Endnotes)\b(.*)$'
-)
-TOC_NUMBERED_RE = re.compile(r'^\d+[A-Z]{0,2}(?:\.\d+[A-Z]?)?\s')
-
-def extract_toc_titles(cleaned, toc_start, toc_end):
-    """The front-matter Contents listing gives the full, unwrapped title for
-    each Part/Division/Schedule — the body text reprints these as running-page
-    headers and sometimes line-wraps them, so the Contents copy is used as the
-    source of truth for heading labels."""
-    lines = [l.strip() for l in cleaned[toc_start:toc_end].split("\n")]
-    n = len(lines)
-    titles = {}
-
-    def ends_with_pagenum(text):
-        return re.search(r'\d+$', text) is not None
-
-    i = 0
-    while i < n:
-        s = lines[i]
-        if not s:
-            i += 1
-            continue
-        m = TOC_START_RE.match(s)
-        if m:
-            kind_num = m.group(1)
-            full = s
-            j = i + 1
-            while j < n and lines[j] and not TOC_START_RE.match(lines[j]) and not TOC_NUMBERED_RE.match(lines[j]):
-                full += " " + lines[j]
-                j += 1
-            full_clean = re.sub(r'\s+\d+$', '', full).strip()
-            if kind_num.startswith("Part"):
-                hid = slugify_heading("part", kind_num.split(None, 1)[1])
-            elif kind_num.startswith("Subdivision"):
-                hid = slugify_heading("subdiv", kind_num.split(None, 1)[1])
-            elif kind_num.startswith("Division"):
-                hid = slugify_heading("div", kind_num.split(None, 1)[1])
-            elif kind_num.startswith("Schedule"):
-                hid = slugify_heading("sch", kind_num.split(None, 1)[1])
-            else:
-                hid = kind_num.lower()
-            if hid not in titles:
-                titles[hid] = full_clean
-            i = j if j > i else i + 1
-            continue
-        m2 = TOC_NUMBERED_RE.match(s)
-        if m2:
-            num = s.split(None, 1)[0]
-            full = s
-            j = i + 1
-            while not ends_with_pagenum(full) and j < n and lines[j] and not TOC_START_RE.match(lines[j]) and not TOC_NUMBERED_RE.match(lines[j]):
-                full += " " + lines[j]
-                j += 1
-            full_clean = re.sub(r'\s+\d+$', '', full).strip()
-            # drop the leading number token to get just the title, matching
-            # the NUMBERED_SECTION_RE grouping used for body headings
-            full_clean = re.sub(r'^\S+\s+', '', full_clean, count=1)
-            hid = slugify_heading("s", num)
-            if hid not in titles:
-                titles[hid] = f"{num} {full_clean}"
-            i = j if j > i else i + 1
-            continue
-        i += 1
-    return titles
-
-def slugify_heading(kind, num):
-    num_s = re.sub(r'[.\s]+', '-', num)
-    return f"{kind}-{num_s}"
-
-def parse_body(body):
-    lines = body.split("\n")
+def parse_doc(doc, unmapped_styles):
     blocks = []
-    current = None  # dict(type, text list)
-    in_endnotes = False
-    # Schedules restart their own clause numbering at 1, which otherwise
-    # collides with the Act's (unrelated) main section numbers of the same
-    # value. Scope numbered-heading ids to the enclosing schedule to keep
-    # anchors unique.
-    schedule_scope = ""
-    scope_prefix = ""
-
-    def close():
-        nonlocal current
-        if current is not None and current["text"]:
-            blocks.append(current)
-        current = None
-
-    for raw_line in lines:
-        s = raw_line.strip()
-        if s == "":
-            close()
-            continue
-
-        m = PART_RE.match(s)
-        if m:
-            close()
-            schedule_scope = ""
-            scope_prefix = ""
-            blocks.append({"type": "h2", "kind": "struct", "text": [s], "id": slugify_heading("part", m.group(1))})
-            continue
-        m = SCHEDULE_RE.match(s)
-        if m:
-            close()
-            sch_id = slugify_heading("sch", m.group(1))
-            schedule_scope = sch_id + "-"
-            scope_prefix = schedule_scope
-            blocks.append({"type": "h2", "kind": "struct", "text": [s], "id": sch_id})
-            continue
-        if s in ("Dictionary", "Endnotes"):
-            close()
-            schedule_scope = ""
-            scope_prefix = ""
-            blocks.append({"type": "h2", "kind": "struct", "text": [s], "id": s.lower()})
-            in_endnotes = (s == "Endnotes")
-            continue
-        m = SCHEDULE_PART_RE.match(s)
-        if m and schedule_scope:
-            close()
-            sub_id = schedule_scope + slugify_heading("part", m.group(1))
-            scope_prefix = sub_id + "-"
-            blocks.append({"type": "h3", "kind": "struct", "text": [s], "id": sub_id})
-            continue
-        m = DIVISION_RE.match(s)
-        if m:
-            close()
-            blocks.append({"type": "h3", "kind": "struct", "text": [s], "id": slugify_heading("div", m.group(1))})
-            continue
-        m = SUBDIVISION_RE.match(s)
-        if m:
-            close()
-            blocks.append({"type": "h4", "kind": "struct", "text": [s], "id": slugify_heading("subdiv", m.group(1))})
-            continue
-        if in_endnotes and ENDNOTE_SUBSECTION_RE.match(s):
-            close()
-            m = NUMBERED_SECTION_RE.match(s)
-            # These repeat as a running-header reminder on every page of their
-            # subsection (like Part/Division headings), so dedup like "struct".
-            # Prefixed distinctly so they can't collide with a real numbered
-            # section elsewhere in the Act that happens to share the number.
-            blocks.append({"type": "h3", "kind": "struct", "text": [s], "id": slugify_heading("endnote", m.group(1))})
-            continue
-        m = NUMBERED_SECTION_RE.match(s)
-        if m and not s.rstrip().endswith((",", ";", ":")) and not in_endnotes:
-            close()
-            blocks.append({"type": "h3", "kind": "section", "text": [s], "id": scope_prefix + slugify_heading("s", m.group(1))})
-            continue
-        m = CLAUSE_RE.match(s)
-        if m:
-            close()
-            current = {"type": "clause", "text": [s]}
-            continue
-        if NOTE_RE.match(s):
-            close()
-            current = {"type": "note", "text": [s]}
-            continue
-        # continuation or new normal paragraph
-        if current is None or current["type"] == "h2" or current["type"] == "h3":
-            current = {"type": "para", "text": [s]}
-        else:
-            current["text"].append(s)
-    close()
-
-    # De-duplicate structural headings (Part/Division/Schedule/Dictionary/Endnotes):
-    # the source PDF reprints the current Part/Division as a running-header
-    # reminder on every page, so only the first occurrence of each is real.
+    schedule_scope = ""   # e.g. "sch-1-"
+    subpart_scope = ""    # e.g. "part-1-1-" (nested inside a schedule)
     seen_struct_ids = set()
-    deduped = []
-    for b in blocks:
-        if b.get("kind") == "struct":
-            if b["id"] in seen_struct_ids:
-                continue
-            seen_struct_ids.add(b["id"])
-        deduped.append(b)
-    return deduped
 
-def render_html(doc, blocks, meta):
-    parts_nav = []
+    for p in doc.paragraphs:
+        text = p.text.strip()
+        if not text:
+            continue
+        style = p.style.name
+        if is_skippable(style, text):
+            continue
+
+        if style in STRUCT_STYLES:
+            tag, kind = STRUCT_STYLES[style]
+            if kind == "part":
+                schedule_scope = ""
+                subpart_scope = ""
+                num, title = split_num_title(text)
+                hid = f"part-{slugify_num(bare_num(num))}"
+            elif kind == "div":
+                num, title = split_num_title(text)
+                hid = f"div-{slugify_num(bare_num(num))}"
+            elif kind == "subdiv":
+                num, title = split_num_title(text)
+                hid = f"subdiv-{slugify_num(bare_num(num))}"
+            elif kind == "sch":
+                num, title = split_num_title(text)
+                subpart_scope = ""
+                hid = f"sch-{slugify_num(bare_num(num))}"
+                schedule_scope = hid + "-"
+            elif kind == "schpart":
+                num, title = split_num_title(text)
+                part_num = slugify_num(bare_num(num))
+                hid = schedule_scope + f"part-{part_num}"
+                subpart_scope = f"part-{part_num}-"
+            elif kind == "fixed:dictionary":
+                title, hid = "Dictionary", "dictionary"
+                schedule_scope = subpart_scope = ""
+            elif kind == "fixed:endnotes":
+                title, hid = "Endnotes", "endnotes"
+                schedule_scope = subpart_scope = ""
+            elif kind == "endnote":
+                num, t = split_num_title(text)
+                title = f"{num} {t}"
+                hid = f"endnote-{slugify_num(num)}"
+            if hid in seen_struct_ids:
+                continue  # defensive; DOCX shouldn't repeat these
+            seen_struct_ids.add(hid)
+            display = text.replace("\t", " ") if kind not in ("fixed:dictionary", "fixed:endnotes") else title
+            blocks.append({"type": tag, "kind": "struct", "text": display, "id": hid})
+            continue
+
+        if style in SECTION_STYLES:
+            num, title = split_num_title(text)
+            hid = schedule_scope + subpart_scope + f"s-{slugify_num(num)}"
+            blocks.append({"type": "h3", "kind": "section", "text": f"{num} {title}", "id": hid})
+            continue
+
+        cls = CSS_CLASS_BY_STYLE.get(style)
+        if cls is None:
+            for prefix, c in CSS_CLASS_PREFIX.items():
+                if style.startswith(prefix):
+                    cls = c
+                    break
+        if cls is None:
+            unmapped_styles.add(style)
+            cls = ""
+        blocks.append({"type": "p", "kind": "content", "text": text.replace("\t", " "), "class": cls})
+
+    return blocks
+
+def render_html(doc_meta, blocks, page_meta):
+    nav_items = []
     body_html = []
     for b in blocks:
-        text = " ".join(b["text"])
-        esc = html.escape(text)
-        if b["type"] == "h2":
-            body_html.append(f'<h2 id="{b["id"]}">{esc}</h2>')
-            parts_nav.append((b["id"], esc))
-        elif b["type"] == "h3":
-            body_html.append(f'<h3 id="{b["id"]}">{esc}</h3>')
-        elif b["type"] == "h4":
-            body_html.append(f'<h4 id="{b["id"]}">{esc}</h4>')
-        elif b["type"] == "clause":
-            body_html.append(f'<p class="clause">{esc}</p>')
-        elif b["type"] == "note":
-            body_html.append(f'<p class="note">{esc}</p>')
+        esc = html.escape(b["text"])
+        if b["kind"] in ("struct", "section"):
+            tag = b["type"]
+            body_html.append(f'<{tag} id="{b["id"]}">{esc}</{tag}>')
+            if b["kind"] == "struct" and tag == "h2":
+                nav_items.append((b["id"], esc))
         else:
-            body_html.append(f'<p>{esc}</p>')
+            cls = f' class="{b["class"]}"' if b["class"] else ""
+            body_html.append(f'<p{cls}>{esc}</p>')
 
-    nav_items = "\n".join(f'<li><a href="#{i}">{t}</a></li>' for i, t in parts_nav)
+    nav_html = "\n".join(f'<li><a href="#{i}">{t}</a></li>' for i, t in nav_items)
 
     meta_bits = []
-    if meta.get("effective"):
-        meta_bits.append(f'Effective: {html.escape(meta["effective"])}')
-    if meta.get("republication_no"):
-        meta_bits.append(f'Republication No {html.escape(meta["republication_no"])}')
-    if meta.get("last_amendment"):
-        meta_bits.append(f'Last amendment: {html.escape(meta["last_amendment"])}')
+    if page_meta.get("effective"):
+        meta_bits.append(f'Effective: {html.escape(page_meta["effective"])}')
+    if page_meta.get("republication_no"):
+        meta_bits.append(f'Republication No {html.escape(page_meta["republication_no"])}')
+    if page_meta.get("last_amendment"):
+        meta_bits.append(f'Last amendment: {html.escape(page_meta["last_amendment"])}')
     meta_line = " &middot; ".join(meta_bits)
 
     other_docs = "\n".join(
         f'<li><a href="{d["slug"]}.html">{html.escape(d["title"])}</a></li>'
-        for d in DOCS if d["slug"] != doc["slug"]
+        for d in DOCS if d["slug"] != doc_meta["slug"]
     )
 
     return f"""<!doctype html>
 <html lang="en-AU">
 <head>
 <meta charset="utf-8">
-<title>{html.escape(doc["title"])} — Strata Bot Knowledge Base</title>
-<meta name="description" content="Full text of the {html.escape(doc["title"])} ({doc["citation"]}), Australian Capital Territory.">
+<title>{html.escape(doc_meta["title"])} — Strata Bot Knowledge Base</title>
+<meta name="description" content="Full text of the {html.escape(doc_meta["title"])} ({doc_meta["citation"]}), Australian Capital Territory.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -361,13 +234,13 @@ def render_html(doc, blocks, meta):
 </ul>
 </nav>
 <main id="main">
-<h1>{html.escape(doc["title"])}</h1>
-<p class="doc-meta">{doc["citation"]} ({doc["kind"]}), Australian Capital Territory{" &middot; " + meta_line if meta_line else ""}</p>
+<h1>{html.escape(doc_meta["title"])}</h1>
+<p class="doc-meta">{doc_meta["citation"]} ({doc_meta["kind"]}), Australian Capital Territory{" &middot; " + meta_line if meta_line else ""}</p>
 <p class="source-note">This page reproduces the full text of the <a href="https://www.legislation.act.gov.au/">ACT legislation register</a> republication for reference by an automated assistant. It is not an authorised legal copy &mdash; always confirm current provisions at <a href="https://www.legislation.act.gov.au/">legislation.act.gov.au</a>.</p>
 <nav class="toc" aria-label="Table of contents">
 <h2 class="toc-heading">Contents</h2>
 <ul>
-{nav_items}
+{nav_html}
 </ul>
 </nav>
 <article>
@@ -382,10 +255,10 @@ def render_html(doc, blocks, meta):
 """
 
 def build_index():
-    items = []
-    for d in DOCS:
-        items.append(f'<li><a href="{d["slug"]}.html">{html.escape(d["title"])}</a> <span class="citation">({d["citation"]})</span></li>')
-    items_html = "\n".join(items)
+    items = "\n".join(
+        f'<li><a href="{d["slug"]}.html">{html.escape(d["title"])}</a> <span class="citation">({d["citation"]})</span></li>'
+        for d in DOCS
+    )
     return f"""<!doctype html>
 <html lang="en-AU">
 <head>
@@ -404,7 +277,7 @@ def build_index():
 <h1>Strata Bot Knowledge Base</h1>
 <p>Reference text of the Australian Capital Territory legislation governing unit titles, community title, and owners corporation management. Each document below is reproduced in full on its own page.</p>
 <ul class="doc-list">
-{items_html}
+{items}
 </ul>
 <p class="source-note">Source: <a href="https://www.legislation.act.gov.au/">ACT legislation register</a>. These pages are unofficial reproductions kept for use as a reference knowledge base; always confirm current provisions at the official register.</p>
 </main>
@@ -459,16 +332,24 @@ main {
   margin: 0 auto;
   padding: 1.5rem 1.25rem 4rem;
 }
-h1, h2, h3 { line-height: 1.25; }
+h1, h2, h3, h4 { line-height: 1.25; }
 h1 { font-size: 1.7rem; margin-top: 0.5rem; }
 h2 { font-size: 1.3rem; margin-top: 2.2rem; border-top: 1px solid var(--border); padding-top: 1.2rem; }
 h3 { font-size: 1.05rem; margin-top: 1.4rem; }
 h4 { font-size: 0.98rem; margin-top: 1.2rem; color: var(--muted); }
 a { color: var(--link); }
 p { margin: 0.8rem 0; }
-p.clause { margin-left: 1.5rem; }
-p.note, p.source-note, p.doc-meta { color: var(--muted); font-size: 0.92rem; }
-p.note { margin-left: 1.5rem; font-style: italic; }
+p.lead { margin-top: 1rem; }
+p.clause-a { margin-left: 1.5rem; }
+p.clause-i { margin-left: 3rem; }
+p.clause-A { margin-left: 4.5rem; }
+p.def { margin-left: 1.5rem; font-style: italic; }
+p.note { margin-left: 1.5rem; color: var(--muted); font-size: 0.92rem; font-style: italic; }
+p.ref { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0.8rem; }
+p.amdt-act { font-weight: 600; margin-top: 1rem; }
+p.amdt-head { font-weight: 600; margin-top: 0.8rem; }
+p.amdt-detail, p.amdt-entry { color: var(--muted); font-size: 0.88rem; margin: 0.15rem 0 0.15rem 1.5rem; }
+p.source-note, p.doc-meta { color: var(--muted); font-size: 0.92rem; }
 .doc-switch {
   max-width: 46rem;
   margin: 0.75rem auto 0;
@@ -483,8 +364,8 @@ p.note { margin-left: 1.5rem; font-style: italic; }
   margin: 1.5rem 0;
 }
 .toc-heading { margin: 0 0 0.5rem; border: none; padding: 0; font-size: 1rem; }
-.toc ul { columns: 1; margin: 0; padding-left: 1.1rem; }
-.toc li { break-inside: avoid; margin: 0.15rem 0; }
+.toc ul { margin: 0; padding-left: 1.1rem; }
+.toc li { margin: 0.15rem 0; }
 .doc-list { list-style: none; padding: 0; }
 .doc-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
 .citation { color: var(--muted); font-size: 0.9rem; }
@@ -492,50 +373,32 @@ p.note { margin-left: 1.5rem; font-style: italic; }
 """
 
 def main():
-    for doc in DOCS:
-        path = f"{SRC_DIR}/{doc['pdf']}"
-        raw = pdf_to_text(path)
-        meta = extract_metadata(raw)
-        cleaned = clean_lines(raw, doc["title"])
-        toc_start = find_nth_exact_line(cleaned, "Australian Capital Territory", 2)
-        start = find_nth_exact_line(cleaned, "Australian Capital Territory", 3)
-        body = cleaned[start:] if start != -1 else cleaned
-        end = body.find("\xa9  Australian Capital Territory")
-        if end == -1:
-            end = body.find("©  Australian Capital Territory")
-        if end != -1:
-            body = body[:end]
-        toc_titles = extract_toc_titles(cleaned, toc_start, start) if toc_start != -1 and start != -1 else {}
-        blocks = parse_body(body)
-        seen_section_ids = set()
-        for b in blocks:
-            kind = b.get("kind")
-            if kind == "section":
-                # Numbers can coincidentally repeat (e.g. an inline numbered
-                # example gets misread as a heading with the same id as a real
-                # section). Only trust the TOC swap-in for the first, and only
-                # when the TOC text is a superset of what's already there, so
-                # a genuine mismatch is left alone rather than overwritten.
-                first_seen = b["id"] not in seen_section_ids
-                seen_section_ids.add(b["id"])
-                if first_seen and b["id"] in toc_titles:
-                    existing = b["text"][0]
-                    candidate = toc_titles[b["id"]]
-                    if candidate.startswith(existing) or existing.startswith(candidate):
-                        b["text"] = [candidate if len(candidate) >= len(existing) else existing]
-            elif kind == "struct" and b["id"] in toc_titles:
-                b["text"] = [toc_titles[b["id"]]]
-        html_out = render_html(doc, blocks, meta)
-        with open(f"{OUT_DIR}/{doc['slug']}.html", "w") as f:
-            f.write(html_out)
-        h2_count = sum(1 for b in blocks if b["type"] == "h2")
-        h3_count = sum(1 for b in blocks if b["type"] == "h3")
-        print(doc["slug"], "blocks=", len(blocks), "h2=", h2_count, "h3=", h3_count, "meta=", meta)
+    unmapped_styles = set()
+    for doc_meta in DOCS:
+        path = os.path.join(SRC_DIR, doc_meta["docx"])
+        doc = docx.Document(path)
+        page_meta = extract_metadata(doc)
+        blocks = parse_doc(doc, unmapped_styles)
+        out_html = render_html(doc_meta, blocks, page_meta)
+        with open(os.path.join(OUT_DIR, f"{doc_meta['slug']}.html"), "w") as f:
+            f.write(out_html)
+        h2 = sum(1 for b in blocks if b["type"] == "h2")
+        h3 = sum(1 for b in blocks if b["type"] == "h3")
+        h4 = sum(1 for b in blocks if b["type"] == "h4")
+        print(doc_meta["slug"], "blocks=", len(blocks), "h2=", h2, "h3=", h3, "h4=", h4, "meta=", page_meta)
 
-    with open(f"{OUT_DIR}/index.html", "w") as f:
+    with open(os.path.join(OUT_DIR, "index.html"), "w") as f:
         f.write(build_index())
-    with open(f"{OUT_DIR}/style.css", "w") as f:
+    with open(os.path.join(OUT_DIR, "style.css"), "w") as f:
         f.write(CSS)
+
+    if unmapped_styles:
+        print("\nWARNING: unmapped styles rendered as plain <p> (review CSS_CLASS_BY_STYLE):")
+        for s in sorted(unmapped_styles):
+            print(" -", s)
+    else:
+        print("\nAll styles mapped.")
 
 if __name__ == "__main__":
     main()
+
