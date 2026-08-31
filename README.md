@@ -30,6 +30,19 @@ authorised legal copies — always confirm current provisions at the
   `AmdtsEntries`, etc. — the ACT Parliamentary Counsel's Word template)
   straight onto HTML headings and paragraph classes, then writes the HTML
   pages plus `index.html`/`style.css` to the repo root.
+- Headings are emitted at their real depth — Part/Schedule at `h2`,
+  Division/Schedule Part at `h3`, Subdivision at `h4`, and each section or
+  schedule clause one level below whatever contains it — so the page outline
+  matches the document's own hierarchy.
+- Because schedule clause numbering restarts in each Part (the UTMA's
+  schedule 1 has a clause 8 in both part 1.1 and part 1.2), and a bare
+  "26 Other qualifications…" heading doesn't say which Part it sits under,
+  every section and clause heading carries a small bracketed locator after
+  the verbatim heading text. The legislative wording itself is untouched.
+- Tables are walked in document order alongside the paragraphs. The
+  reviewable-decisions schedules of the Unit Titles Act and Community Title
+  Act exist only as tables, as do the endnote abbreviation key and the list
+  of earlier republications.
 
 The DOCX republication was used instead of the PDF (also available from the
 register) because its paragraphs already carry the real document structure:
