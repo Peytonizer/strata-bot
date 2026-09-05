@@ -1,1 +1,11 @@
 CLAUDE.local.md
+CLAUDE.md
+SPEC.md
+IDEAS.md
+
+# macOS Finder metadata
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

@@ -2,26 +2,64 @@
 <html lang="en-AU">
 <head>
 <meta charset="utf-8">
-<title>Strata Bot Knowledge Base</title>
-<meta name="description" content="Reference knowledge base of ACT unit titles and community title legislation.">
+<title>strata — ACT strata legislation and tools</title>
+<meta name="description" content="Reference material and small tools for strata work in the ACT. Everything here runs in your browser, and none of it is legal advice.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23b33a5f'/%3E%3Cpath d='M8 22V13l8-4 8 4v9' fill='none' stroke='%23fff' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/hub.css">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
-<header class="site-header">
-<p class="site-name"><a href="index.html">Strata Bot Knowledge Base</a></p>
+<nav class="kit-nav" aria-label="strata family">
+  <a class="kit-nav-home" href="https://strata.noradz.io/">strata<span class="dot">.</span></a>
+  <ul class="kit-nav-links">
+    <li><a data-kit-id="legislation" href="https://strata.noradz.io/legislation/">Legislation</a></li>
+    <li><a data-kit-id="lodger" href="https://lodger.noradz.io/">lodger</a></li>
+    <li><a data-kit-id="former" href="https://former.noradz.io/">former</a></li>
+  </ul>
+</nav>
+<div class="shell">
+<header class="masthead">
+<h1 class="wordmark">strata<span class="dot">.</span></h1>
+<p class="tagline">Reference material and small tools for strata work in the ACT. Everything here runs in your browser, and none of it is legal advice.</p>
+<button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false">
+<span class="visually-hidden">Switch between the light and dark palette</span>
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+<circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.8"></circle>
+<path d="M12 2.4v2.2M12 19.4v2.2M2.4 12h2.2M19.4 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+</svg>
+<span data-theme-label>Light</span>
+</button>
 </header>
 <main id="main">
-<h1>Strata Bot Knowledge Base</h1>
-<p>Reference text of the Australian Capital Territory legislation governing unit titles, community title, and owners corporation management. Each document below is reproduced in full on its own page.</p>
-<ul class="doc-list">
-<li><a href="unit-titles-act-2001.html">Unit Titles Act 2001</a> <span class="citation">(A2001-16, cited as UTA)</span></li>
-<li><a href="community-title-act-2001.html">Community Title Act 2001</a> <span class="citation">(A2001-58, cited as CTA)</span></li>
-<li><a href="unit-titles-management-regulation-2011.html">Unit Titles (Management) Regulation 2011</a> <span class="citation">(SL2011-39, cited as UTMR)</span></li>
-<li><a href="unit-titles-management-act-2011.html">Unit Titles (Management) Act 2011</a> <span class="citation">(A2011-41, cited as UTMA)</span></li>
+<ul class="cards">
+<li class="card card-legislation">
+<h2><a href="https://strata.noradz.io/legislation/">Legislation</a></h2>
+<p class="card-summary">The ACT unit titles and community title Acts, in full.</p>
+<p class="card-blurb">The full text of the four instruments that govern unit titles, community title and owners corporation management in the ACT, one plain page per document with the real heading hierarchy intact. Unofficial reproductions kept for reference and for feeding to an assistant — confirm current provisions at the ACT legislation register.</p>
+</li>
+<li class="card card-lodger">
+<h2><a href="https://lodger.noradz.io/">lodger</a></h2>
+<p class="card-summary">Merge two PDFs and stamp every page.</p>
+<p class="card-blurb">Merge two PDFs and stamp every page of the result — your seal or logo in the bottom-right corner, and a page number in a circle in the footer. The shape of an exhibit or annexure stamp, for the bundles that get filed. Numbering runs unbroken across both documents and can start at any number.</p>
+</li>
+<li class="card card-former">
+<h2><a href="https://former.noradz.io/">former</a></h2>
+<p class="card-summary">Fill and sign a flat PDF, or make one fillable.</p>
+<p class="card-blurb">Fill and sign a flat PDF in a tab, or place the fields once and export the form still blank but now fillable, so everyone you send it to can type into it. For the scanned forms that arrive by email with no form fields in them.</p>
+</li>
 </ul>
-<p class="source-note">Source: <a href="https://www.legislation.act.gov.au/">ACT legislation register</a>. These pages are unofficial reproductions kept for use as a reference knowledge base; always confirm current provisions at the official register.</p>
+<section class="about">
+<h2>What this is</h2>
+<p>A side project, not a product. These are the things I wanted to exist while doing strata work in the ACT: the legislation in a form you can search and link into, and a couple of small tools for the paperwork around it.</p>
+<p>The tools run entirely in your browser. Nothing you open in them is uploaded anywhere, there is no account, and there is no analytics — each of them ships a content security policy that stops the page making a network request at all, which you can check in your browser's network tab.</p>
+<p class="caveat">None of it is legal advice, and the reproduced legislation is unofficial. For anything that matters, confirm the current provision at the <a href="https://www.legislation.act.gov.au/">ACT legislation register</a>.</p>
+</section>
 </main>
+<footer class="colophon">
+<span>Built in the open — <a href="https://github.com/Peytonizer">github.com/Peytonizer</a>.</span>
+</footer>
+</div>
+<script type="module" src="/assets/theme-toggle.js"></script>
 </body>
 </html>

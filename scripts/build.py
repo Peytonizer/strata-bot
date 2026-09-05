@@ -1,4 +1,4 @@
-import re, html, os
+import re, html, os, json, shutil, datetime
 import docx
 from docx.oxml.ns import qn
 from docx.table import Table
@@ -311,7 +311,85 @@ def render_table(rows):
     out.append("</div>")
     return "\n".join(out)
 
-def render_html(doc_meta, blocks, page_meta):
+# --- Output layout ---------------------------------------------------------
+#
+# The site is a hub with the legislation reader nested under it, not a bare set of documents:
+#
+#   /                     the hub, generated from the strata-kit manifest
+#   /legislation/         the reader's index
+#   /legislation/*.html   one page per instrument
+#   /assets/*.css         one stylesheet per page type, kit theme concatenated in
+#   /<slug>.html          redirect stubs, because the documents used to live at the root
+#
+# Absolute asset paths are safe here because the site is served at a custom domain's root.
+# They would break on the bare github.io repository subpath, which this site no longer uses.
+
+KIT_DIR = os.path.join(REPO_ROOT, "vendor", "strata-kit")
+LEG_DIR = os.path.join(REPO_ROOT, "legislation")
+ASSETS_DIR = os.path.join(REPO_ROOT, "assets")
+SITE_URL = "https://strata.noradz.io"
+BUILD_DATE = datetime.date.today().isoformat()
+
+
+def load_kit():
+    """The family manifest and the pre-rendered navigation bar, from the strata-kit submodule.
+
+    The bar is rendered once in the kit and committed there rather than re-implemented here:
+    the other consumers are Vite builds, and two renderers for one piece of markup drift.
+    """
+    with open(os.path.join(KIT_DIR, "projects.json")) as f:
+        manifest = json.load(f)
+    with open(os.path.join(KIT_DIR, "nav.html")) as f:
+        nav = f.read().strip()
+    return manifest, nav
+
+
+def kit_nav(nav, current):
+    """Mark this site's own entry in the shared bar. The kit ships one file for every site."""
+    marker = f'data-kit-id="{current}"'
+    return nav.replace(marker, f'{marker} aria-current="page"', 1)
+
+
+FAVICON = (
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Crect width='32' height='32' rx='8' fill='%23b33a5f'/%3E"
+    "%3Cpath d='M8 22V13l8-4 8 4v9' fill='none' stroke='%23fff' stroke-width='2' "
+    "stroke-linejoin='round'/%3E%3C/svg%3E"
+)
+
+
+def page(title, description, stylesheet, nav, body, extra_head=""):
+    """The shell every page in this repo shares: head, the family bar, then the page's body."""
+    return f"""<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+<meta name="description" content="{description}">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="{FAVICON}">
+<link rel="stylesheet" href="/assets/{stylesheet}">
+{extra_head}</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+{nav}
+{body}
+</body>
+</html>
+"""
+
+
+THEME_TOGGLE = """<button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false">
+<span class="visually-hidden">Switch between the light and dark palette</span>
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+<circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.8"></circle>
+<path d="M12 2.4v2.2M12 19.4v2.2M2.4 12h2.2M19.4 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+</svg>
+<span data-theme-label>Light</span>
+</button>"""
+
+
+def render_html(doc_meta, blocks, page_meta, nav):
     nav_items = []
     body_html = []
     for b in blocks:
@@ -331,7 +409,7 @@ def render_html(doc_meta, blocks, page_meta):
             cls = f' class="{b["class"]}"' if b["class"] else ""
             body_html.append(f'<p{cls}>{esc}</p>')
 
-    nav_html = render_toc(nav_items)
+    toc_html = render_toc(nav_items)
 
     meta_bits = [f'{doc_meta["citation"]} ({doc_meta["kind"]})',
                  f'cited here as {doc_meta["abbrev"]}',
@@ -349,21 +427,7 @@ def render_html(doc_meta, blocks, page_meta):
         for d in DOCS if d["slug"] != doc_meta["slug"]
     )
 
-    return f"""<!doctype html>
-<html lang="en-AU">
-<head>
-<meta charset="utf-8">
-<title>{html.escape(doc_meta["title"])} ({doc_meta["abbrev"]}) — Strata Bot Knowledge Base</title>
-<meta name="description" content="Full text of the {html.escape(doc_meta["title"])} ({doc_meta["citation"]}), Australian Capital Territory, cited as {doc_meta["abbrev"]}.">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<a class="skip-link" href="#main">Skip to content</a>
-<header class="site-header">
-<p class="site-name"><a href="index.html">Strata Bot Knowledge Base</a></p>
-</header>
-<nav class="doc-switch" aria-label="Other documents">
+    body = f"""<nav class="doc-switch" aria-label="Other documents">
 <ul>
 {other_docs}
 </ul>
@@ -371,105 +435,228 @@ def render_html(doc_meta, blocks, page_meta):
 <main id="main">
 <h1>{html.escape(doc_meta["title"])} ({doc_meta["abbrev"]})</h1>
 <p class="doc-meta">{meta_line}</p>
-<p class="source-note">This page reproduces the full text of the <a href="https://www.legislation.act.gov.au/">ACT legislation register</a> republication for reference by an automated assistant. It is not an authorised legal copy &mdash; always confirm current provisions at <a href="https://www.legislation.act.gov.au/">legislation.act.gov.au</a>.</p>
+<p class="source-note">This page reproduces the full text of the <a href="https://www.legislation.act.gov.au/">ACT legislation register</a> republication. It is not an authorised legal copy &mdash; always confirm current provisions at <a href="https://www.legislation.act.gov.au/">legislation.act.gov.au</a>.</p>
 <nav class="toc" aria-label="Table of contents">
 <h2 class="toc-heading">Contents</h2>
-{nav_html}
+{toc_html}
 </nav>
 <article>
 {chr(10).join(body_html)}
 </article>
 </main>
 <footer class="site-footer">
-<p><a href="index.html">&larr; Back to knowledge base index</a></p>
-</footer>
-</body>
-</html>
-"""
+<p><a href="index.html">&larr; All four documents</a> &middot; <a href="/">strata.noradz.io</a></p>
+</footer>"""
 
-def build_index():
+    return page(
+        title=f'{html.escape(doc_meta["title"])} ({doc_meta["abbrev"]}) — ACT strata legislation',
+        description=f'Full text of the {html.escape(doc_meta["title"])} ({doc_meta["citation"]}), Australian Capital Territory, cited as {doc_meta["abbrev"]}.',
+        stylesheet="legislation.css",
+        nav=nav,
+        body=body,
+    )
+
+
+def build_legislation_index(nav):
     items = "\n".join(
         f'<li><a href="{d["slug"]}.html">{html.escape(d["title"])}</a> '
         f'<span class="citation">({d["citation"]}, cited as {d["abbrev"]})</span></li>'
         for d in DOCS
     )
+    body = f"""<main id="main">
+<h1>ACT strata legislation</h1>
+<p>The full text of the Australian Capital Territory legislation governing unit titles, community title, and owners corporation management. Each document below is reproduced in full on its own page, with the document's own heading hierarchy intact so a provision can be linked to directly.</p>
+<ul class="doc-list">
+{items}
+</ul>
+<p class="source-note">Source: <a href="https://www.legislation.act.gov.au/">ACT legislation register</a>. These are unofficial reproductions kept for reference; always confirm current provisions at the official register.</p>
+</main>
+<footer class="site-footer">
+<p><a href="/">&larr; strata.noradz.io</a></p>
+</footer>"""
+    return page(
+        title="ACT strata legislation — full text",
+        description="The full text of the ACT unit titles and community title legislation, one page per instrument.",
+        stylesheet="legislation.css",
+        nav=nav,
+        body=body,
+    )
+
+
+def build_hub(manifest, nav):
+    """The landing page: what the family is, and a card for each project in the manifest.
+
+    The cards are the manifest — adding a strata project means adding an entry in the kit and
+    moving this repo's submodule pin, not editing markup here.
+    """
+    family = manifest["family"]
+    cards = []
+    for project in manifest["projects"]:
+        if not project.get("hub"):
+            continue
+        status = project["status"]
+        chip = "" if status == "live" else f'<span class="chip chip-{html.escape(status)}">{html.escape(status)}</span>'
+        heading = html.escape(project["name"])
+        link_open, link_close = (f'<a href="{html.escape(project["url"])}">', "</a>") if status != "planned" else ("", "")
+        cards.append(f"""<li class="card card-{html.escape(project["id"])}">
+<h2>{link_open}{heading}{link_close}{chip}</h2>
+<p class="card-summary">{html.escape(project["summary"])}</p>
+<p class="card-blurb">{html.escape(project["blurb"])}</p>
+</li>""")
+
+    body = f"""<div class="shell">
+<header class="masthead">
+<h1 class="wordmark">{html.escape(family["name"])}<span class="dot">.</span></h1>
+<p class="tagline">{html.escape(family["tagline"])}</p>
+{THEME_TOGGLE}
+</header>
+<main id="main">
+<ul class="cards">
+{chr(10).join(cards)}
+</ul>
+<section class="about">
+<h2>What this is</h2>
+<p>A side project, not a product. These are the things I wanted to exist while doing strata work in the ACT: the legislation in a form you can search and link into, and a couple of small tools for the paperwork around it.</p>
+<p>The tools run entirely in your browser. Nothing you open in them is uploaded anywhere, there is no account, and there is no analytics — each of them ships a content security policy that stops the page making a network request at all, which you can check in your browser's network tab.</p>
+<p class="caveat">None of it is legal advice, and the reproduced legislation is unofficial. For anything that matters, confirm the current provision at the <a href="https://www.legislation.act.gov.au/">ACT legislation register</a>.</p>
+</section>
+</main>
+<footer class="colophon">
+<span>Built in the open — <a href="https://github.com/Peytonizer">github.com/Peytonizer</a>.</span>
+</footer>
+</div>
+<script type="module" src="/assets/theme-toggle.js"></script>"""
+
+    return page(
+        title="strata — ACT strata legislation and tools",
+        description=family["tagline"],
+        stylesheet="hub.css",
+        nav=nav,
+        body=body,
+    )
+
+
+def build_redirect(slug):
+    """A stub at each document's old root-level URL.
+
+    The pages moved under /legislation/ when the hub took the root. The stub redirects in
+    script first, because that is the only way to carry the fragment across — the deep links
+    that matter here are anchors to a single section (#s-26), and a meta refresh drops them.
+    The meta refresh is the fallback for a client with no script, and the visible link is the
+    fallback for one that honours neither.
+    """
+    target = f"/legislation/{slug}.html"
     return f"""<!doctype html>
 <html lang="en-AU">
 <head>
 <meta charset="utf-8">
-<title>Strata Bot Knowledge Base</title>
-<meta name="description" content="Reference knowledge base of ACT unit titles and community title legislation.">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="style.css">
+<title>Moved — {slug}</title>
+<link rel="canonical" href="{SITE_URL}{target}">
+<meta name="robots" content="noindex">
+<meta http-equiv="refresh" content="0; url={target}">
+<script>location.replace("{target}" + location.hash);</script>
 </head>
 <body>
-<a class="skip-link" href="#main">Skip to content</a>
-<header class="site-header">
-<p class="site-name"><a href="index.html">Strata Bot Knowledge Base</a></p>
-</header>
-<main id="main">
-<h1>Strata Bot Knowledge Base</h1>
-<p>Reference text of the Australian Capital Territory legislation governing unit titles, community title, and owners corporation management. Each document below is reproduced in full on its own page.</p>
-<ul class="doc-list">
-{items}
-</ul>
-<p class="source-note">Source: <a href="https://www.legislation.act.gov.au/">ACT legislation register</a>. These pages are unofficial reproductions kept for use as a reference knowledge base; always confirm current provisions at the official register.</p>
-</main>
+<p>This page has moved to <a href="{target}">{target}</a>.</p>
 </body>
 </html>
 """
 
-CSS = """:root {
-  color-scheme: light dark;
-  --bg: #ffffff;
-  --fg: #1a1a1a;
-  --muted: #555555;
-  --link: #0b4f9c;
-  --border: #d8d8d8;
-  --accent-bg: #f4f6f8;
-  --struct: #0b4f9c;
+
+def build_sitemap(manifest):
+    urls = [f"{SITE_URL}/", f"{SITE_URL}/legislation/"]
+    urls += [f"{SITE_URL}/legislation/{d['slug']}.html" for d in DOCS]
+    entries = "\n".join(
+        f"  <url>\n    <loc>{u}</loc>\n    <lastmod>{BUILD_DATE}</lastmod>\n  </url>" for u in urls
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{entries}
+</urlset>
+"""
+
+
+# --- Styles ----------------------------------------------------------------
+#
+# Each page type gets one stylesheet, built by concatenating the family fonts, the kit's
+# theme.css and the page's own rules. Concatenating rather than linking three files keeps it to
+# one request and removes any question of which order they load in; the kit theme is a few
+# kilobytes, so carrying it in both files costs nothing worth optimising.
+
+FONTS_CSS = """/* Self-hosted, not from a CDN: the family's sites make no third-party requests, and this
+   one holds to that even though it has no CSP of its own to enforce it. Both faces are
+   OFL-licensed; the licences are alongside the files in assets/fonts/. */
+@font-face {
+  font-family: 'Fraunces Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('fonts/fraunces-latin-full-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171a;
-    --fg: #e8e8e8;
-    --muted: #a8adb2;
-    --link: #7fb2ff;
-    --border: #33373b;
-    --accent-bg: #1d2124;
-    --struct: #9ec3ff;
-  }
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('fonts/dm-sans-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('fonts/dm-sans-latin-500-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+"""
+
+BASE_CSS = """
 * { box-sizing: border-box; }
+
 body {
-  background: var(--bg);
-  color: var(--fg);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-body);
   line-height: 1.55;
   margin: 0;
   padding: 0;
+  -webkit-font-smoothing: antialiased;
 }
+
 .skip-link {
   position: absolute;
   left: -999px;
   top: 0;
-  background: var(--accent-bg);
-  color: var(--fg);
+  background: var(--surface-sunk);
+  color: var(--ink);
   padding: 0.5rem 1rem;
 }
-.skip-link:focus { left: 0; z-index: 10; }
-.site-header {
-  border-bottom: 1px solid var(--border);
-  padding: 0.75rem 1.25rem;
+.skip-link:focus { left: 0; z-index: 30; }
+
+a { color: var(--accent-text); }
+
+"""
+
+# The reader's own vocabulary, expressed in the kit's tokens rather than in colours of its own.
+# Keeping the local names means the typographic rules below are untouched by the change of
+# palette, and a future token rename is one block to edit rather than eighty declarations.
+LEGISLATION_CSS = """
+:root {
+  --muted: var(--ink-faint);
+  --accent-bg: var(--surface-sunk);
+  --struct: var(--accent-text);
 }
-.site-name a { font-weight: 700; text-decoration: none; color: var(--fg); }
+
 main {
   max-width: 46rem;
   margin: 0 auto;
   padding: 1.5rem 1.25rem 4rem;
 }
-h1, h2, h3, h4, h5 { line-height: 1.25; }
-h1 { font-size: 1.7rem; margin-top: 0.5rem; }
+h1, h2, h3, h4, h5 { line-height: 1.25; font-family: var(--font-display); font-variation-settings: 'SOFT' 30; letter-spacing: -0.01em; }
+h1 { font-size: 1.9rem; margin-top: 0.5rem; }
 h2 { font-size: 1.35rem; margin-top: 2.4rem; border-top: 1px solid var(--border); padding-top: 1.2rem; }
 h3 { font-size: 1.15rem; margin-top: 1.8rem; }
 h4 { font-size: 1.05rem; margin-top: 1.5rem; }
@@ -477,6 +664,7 @@ h5 { font-size: 1rem; margin-top: 1.3rem; }
 /* Part/Division/Subdivision/Schedule headings are dividers, not provisions —
    set them apart so a section never reads as a sibling of its own container. */
 h3.struct, h4.struct, h5.struct {
+  font-family: var(--font-body);
   color: var(--struct);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -486,7 +674,6 @@ h3.struct, h4.struct, h5.struct {
   border-bottom: 1px solid var(--border);
 }
 .heading-scope { font-weight: 400; font-size: 0.8rem; color: var(--muted); }
-a { color: var(--link); }
 p { margin: 0.8rem 0; }
 p.lead { margin-top: 1rem; }
 p.lead-return { margin-top: 0.4rem; }
@@ -512,9 +699,9 @@ th { background: var(--accent-bg); font-weight: 600; }
 }
 .doc-switch ul { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
 .toc {
-  background: var(--accent-bg);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-card);
   padding: 1rem 1.25rem;
   margin: 1.5rem 0;
 }
@@ -525,33 +712,205 @@ th { background: var(--accent-bg); font-weight: 600; }
 .doc-list { list-style: none; padding: 0; }
 .doc-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
 .citation { color: var(--muted); font-size: 0.9rem; }
-.site-footer { max-width: 46rem; margin: 0 auto; padding: 1rem 1.25rem 3rem; }
+.site-footer { max-width: 46rem; margin: 0 auto; padding: 1rem 1.25rem 3rem; font-size: 0.9rem; }
 """
 
+HUB_CSS = """
+/* The wash at the top of the page, carried over from lodger so the hub reads as the same
+   product as the tools it links to. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto;
+  height: 420px;
+  background:
+    radial-gradient(60% 100% at 12% 0%, color-mix(in srgb, var(--rose) 46%, transparent), transparent 70%),
+    radial-gradient(52% 100% at 88% 0%, color-mix(in srgb, var(--bleuet) 42%, transparent), transparent 70%),
+    radial-gradient(40% 80% at 50% 0%, color-mix(in srgb, var(--lemon) 34%, transparent), transparent 75%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 24px 96px;
+}
+
+.masthead {
+  position: relative;
+  margin-bottom: 36px;
+  padding-right: 120px;
+}
+
+.wordmark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings: 'SOFT' 40, 'WONK' 1;
+  font-weight: 600;
+  font-size: clamp(2.6rem, 6vw, 3.6rem);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.wordmark .dot { color: var(--accent-text); }
+
+.tagline {
+  margin: 10px 0 0;
+  max-width: 54ch;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+}
+
+.theme-toggle {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--border-strong); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+  padding: 22px;
+  /* The macaron edge is what distinguishes one card from the next at a glance; it is a
+     surface, never a text colour, which is the rule that keeps the pastel palette readable. */
+  border-top: 4px solid var(--border-strong);
+}
+.card-legislation { border-top-color: var(--lavender); }
+.card-lodger { border-top-color: var(--rose); }
+.card-former { border-top-color: var(--bleuet); }
+
+.card h2 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 30;
+  font-weight: 600;
+  font-size: 1.3rem;
+  letter-spacing: -0.01em;
+}
+.card h2 a { text-decoration: none; color: var(--ink); }
+.card h2 a:hover { color: var(--accent-text); }
+
+.chip {
+  margin-left: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--lemon);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: lowercase;
+  vertical-align: middle;
+}
+
+.card-summary { margin: 0 0 10px; color: var(--ink); font-weight: 500; }
+.card-blurb { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
+
+.about {
+  margin-top: 48px;
+  max-width: 62ch;
+}
+.about h2 {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 30;
+  font-weight: 600;
+  font-size: 1.15rem;
+  margin: 0 0 10px;
+}
+.about p { color: var(--ink-soft); margin: 0 0 12px; }
+.about .caveat { color: var(--ink-faint); font-size: 0.9rem; }
+
+.colophon {
+  margin-top: 48px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+"""
+
+
 def main():
+    manifest, nav_template = load_kit()
+    with open(os.path.join(KIT_DIR, "theme.css")) as f:
+        theme_css = f.read()
+
+    os.makedirs(LEG_DIR, exist_ok=True)
+    os.makedirs(ASSETS_DIR, exist_ok=True)
+
+    leg_nav = kit_nav(nav_template, "legislation")
+    hub_nav = nav_template  # The hub is the family's home; the bar's wordmark already points here.
+
     unmapped_styles = set()
     for doc_meta in DOCS:
         path = os.path.join(SRC_DIR, doc_meta["docx"])
         doc = docx.Document(path)
         page_meta = extract_metadata(doc)
         blocks = parse_doc(doc, unmapped_styles)
-        out_html = render_html(doc_meta, blocks, page_meta)
-        with open(os.path.join(OUT_DIR, f"{doc_meta['slug']}.html"), "w") as f:
+        out_html = render_html(doc_meta, blocks, page_meta, leg_nav)
+        with open(os.path.join(LEG_DIR, f"{doc_meta['slug']}.html"), "w") as f:
             f.write(out_html)
+        with open(os.path.join(OUT_DIR, f"{doc_meta['slug']}.html"), "w") as f:
+            f.write(build_redirect(doc_meta["slug"]))
         counts = {t: sum(1 for b in blocks if b["type"] == t) for t in ("h2", "h3", "h4", "h5", "table")}
         print(doc_meta["slug"], "blocks=", len(blocks), counts, "meta=", page_meta)
 
+    with open(os.path.join(LEG_DIR, "index.html"), "w") as f:
+        f.write(build_legislation_index(leg_nav))
     with open(os.path.join(OUT_DIR, "index.html"), "w") as f:
-        f.write(build_index())
-    with open(os.path.join(OUT_DIR, "style.css"), "w") as f:
-        f.write(CSS)
+        f.write(build_hub(manifest, hub_nav))
+    with open(os.path.join(ASSETS_DIR, "legislation.css"), "w") as f:
+        f.write(FONTS_CSS + theme_css + BASE_CSS + LEGISLATION_CSS)
+    with open(os.path.join(ASSETS_DIR, "hub.css"), "w") as f:
+        f.write(FONTS_CSS + theme_css + BASE_CSS + HUB_CSS)
+    shutil.copyfile(
+        os.path.join(KIT_DIR, "theme-toggle.js"), os.path.join(ASSETS_DIR, "theme-toggle.js")
+    )
+    with open(os.path.join(OUT_DIR, "sitemap.xml"), "w") as f:
+        f.write(build_sitemap(manifest))
+
+    print(f"\nhub, legislation index, {len(DOCS)} documents, {len(DOCS)} redirect stubs, assets, sitemap.")
 
     if unmapped_styles:
         print("\nWARNING: unmapped styles rendered as plain <p> (review CSS_CLASS_BY_STYLE):")
         for s in sorted(unmapped_styles):
             print(" -", s)
     else:
-        print("\nAll styles mapped.")
+        print("All styles mapped.")
+
 
 if __name__ == "__main__":
     main()
