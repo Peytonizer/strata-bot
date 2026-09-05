@@ -366,6 +366,8 @@ body::before {
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
@@ -406,6 +408,32 @@ body::before {
 .card-summary { margin: 0 0 10px; color: var(--ink); font-weight: 500; }
 .card-blurb { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
 
+.card-visit {
+  align-self: flex-end;
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: var(--shadow-soft);
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.card-visit svg { flex: none; }
+.card-visit:hover { color: var(--ink); transform: translate(1px, -1px); }
+.card-visit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* Each card's hover border picks up its own macaron, echoing the top edge. */
+.card-legislation .card-visit:hover { border-color: var(--lavender); }
+.card-lodger .card-visit:hover { border-color: var(--rose); }
+.card-former .card-visit:hover { border-color: var(--bleuet); }
+
 .about {
   margin-top: 48px;
   max-width: 62ch;
@@ -419,14 +447,6 @@ body::before {
 }
 .about p { color: var(--ink-soft); margin: 0 0 12px; }
 .about .caveat { color: var(--ink-faint); font-size: 0.9rem; }
-
-.colophon {
-  margin-top: 48px;
-  padding-top: 22px;
-  border-top: 1px solid var(--border);
-  color: var(--ink-faint);
-  font-size: 0.8rem;
-}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

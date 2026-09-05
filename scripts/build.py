@@ -498,10 +498,15 @@ def build_hub(manifest, nav):
         chip = "" if status == "live" else f'<span class="chip chip-{html.escape(status)}">{html.escape(status)}</span>'
         heading = html.escape(project["name"])
         link_open, link_close = (f'<a href="{html.escape(project["url"])}">', "</a>") if status != "planned" else ("", "")
+        visit = "" if status == "planned" else f"""<a class="card-visit" href="{html.escape(project["url"])}">
+Open
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</a>"""
         cards.append(f"""<li class="card card-{html.escape(project["id"])}">
 <h2>{link_open}{heading}{link_close}{chip}</h2>
 <p class="card-summary">{html.escape(project["summary"])}</p>
 <p class="card-blurb">{html.escape(project["blurb"])}</p>
+{visit}
 </li>""")
 
     body = f"""<div class="shell">
@@ -792,6 +797,8 @@ body::before {
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
@@ -832,6 +839,32 @@ body::before {
 .card-summary { margin: 0 0 10px; color: var(--ink); font-weight: 500; }
 .card-blurb { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
 
+.card-visit {
+  align-self: flex-end;
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: var(--shadow-soft);
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.card-visit svg { flex: none; }
+.card-visit:hover { color: var(--ink); transform: translate(1px, -1px); }
+.card-visit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* Each card's hover border picks up its own macaron, echoing the top edge. */
+.card-legislation .card-visit:hover { border-color: var(--lavender); }
+.card-lodger .card-visit:hover { border-color: var(--rose); }
+.card-former .card-visit:hover { border-color: var(--bleuet); }
+
 .about {
   margin-top: 48px;
   max-width: 62ch;
@@ -845,14 +878,6 @@ body::before {
 }
 .about p { color: var(--ink-soft); margin: 0 0 12px; }
 .about .caveat { color: var(--ink-faint); font-size: 0.9rem; }
-
-.colophon {
-  margin-top: 48px;
-  padding-top: 22px;
-  border-top: 1px solid var(--border);
-  color: var(--ink-faint);
-  font-size: 0.8rem;
-}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
