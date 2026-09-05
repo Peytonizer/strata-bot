@@ -350,11 +350,14 @@ def kit_nav(nav, current):
     return nav.replace(marker, f'{marker} aria-current="page"', 1)
 
 
+# The glyph is noradz's own nav mark (a circle and its chord — see the noradz site's own
+# favicon), kept in the family's rose-on-white treatment to match the sibling sites' icons.
 FAVICON = (
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
     "%3Crect width='32' height='32' rx='8' fill='%23b33a5f'/%3E"
-    "%3Cpath d='M8 22V13l8-4 8 4v9' fill='none' stroke='%23fff' stroke-width='2' "
-    "stroke-linejoin='round'/%3E%3C/svg%3E"
+    "%3Ccircle cx='16' cy='17' r='6' fill='none' stroke='%23fff' stroke-width='2'/%3E"
+    "%3Cpath d='M11.13 13.5L20.87 13.5' stroke='%23fff' stroke-width='2' "
+    "stroke-linecap='round'/%3E%3C/svg%3E"
 )
 
 
@@ -498,11 +501,9 @@ def build_hub(manifest, nav):
         chip = "" if status == "live" else f'<span class="chip chip-{html.escape(status)}">{html.escape(status)}</span>'
         heading = html.escape(project["name"])
         link_open, link_close = (f'<a href="{html.escape(project["url"])}">', "</a>") if status != "planned" else ("", "")
-        # The circle-and-chord mark is noradz's own — reused here, in currentColor, as the
-        # button that sends you out to the parent domain's subdomains.
         visit = "" if status == "planned" else f"""<a class="card-visit" href="{html.escape(project["url"])}">
 Open
-<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="13" r="6" stroke="currentColor" stroke-width="1.8"/><path d="M7.13 9.5L16.87 9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+<svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </a>"""
         cards.append(f"""<li class="card card-{html.escape(project["id"])}">
 <h2>{link_open}{heading}{link_close}{chip}</h2>
@@ -851,24 +852,23 @@ body::before {
   align-items: center;
   gap: 5px;
   padding: 6px 13px;
-  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink-soft);
+  /* Filled with the same macaron as the card's top edge — a surface, never a text colour,
+     so it pairs with --ink rather than carrying the colour itself. */
+  color: var(--ink);
   font-family: var(--font-body);
   font-size: 0.78rem;
   font-weight: 500;
   text-decoration: none;
   box-shadow: var(--shadow-soft);
-  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
+.card-legislation .card-visit { background: var(--lavender); }
+.card-lodger .card-visit { background: var(--rose); }
+.card-former .card-visit { background: var(--bleuet); }
 .card-visit svg { flex: none; }
-.card-visit:hover { color: var(--ink); transform: translate(1px, -1px); }
+.card-visit:hover { box-shadow: var(--shadow-lift); transform: translate(1px, -1px); }
 .card-visit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-/* Each card's hover border picks up its own macaron, echoing the top edge. */
-.card-legislation .card-visit:hover { border-color: var(--lavender); }
-.card-lodger .card-visit:hover { border-color: var(--rose); }
-.card-former .card-visit:hover { border-color: var(--bleuet); }
 
 .about {
   margin-top: 48px;

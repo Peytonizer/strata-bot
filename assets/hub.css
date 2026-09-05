@@ -418,24 +418,23 @@ body::before {
   align-items: center;
   gap: 5px;
   padding: 6px 13px;
-  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--ink-soft);
+  /* Filled with the same macaron as the card's top edge — a surface, never a text colour,
+     so it pairs with --ink rather than carrying the colour itself. */
+  color: var(--ink);
   font-family: var(--font-body);
   font-size: 0.78rem;
   font-weight: 500;
   text-decoration: none;
   box-shadow: var(--shadow-soft);
-  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
+.card-legislation .card-visit { background: var(--lavender); }
+.card-lodger .card-visit { background: var(--rose); }
+.card-former .card-visit { background: var(--bleuet); }
 .card-visit svg { flex: none; }
-.card-visit:hover { color: var(--ink); transform: translate(1px, -1px); }
+.card-visit:hover { box-shadow: var(--shadow-lift); transform: translate(1px, -1px); }
 .card-visit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-/* Each card's hover border picks up its own macaron, echoing the top edge. */
-.card-legislation .card-visit:hover { border-color: var(--lavender); }
-.card-lodger .card-visit:hover { border-color: var(--rose); }
-.card-former .card-visit:hover { border-color: var(--bleuet); }
 
 .about {
   margin-top: 48px;
