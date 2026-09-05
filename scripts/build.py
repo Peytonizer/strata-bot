@@ -516,7 +516,7 @@ def build_hub(manifest, nav):
 </ul>
 <section class="about">
 <h2>What this is</h2>
-<p>A side project, not a product. These are the things I wanted to exist while doing strata work in the ACT: the legislation in a form you can search and link into, and a couple of small tools for the paperwork around it.</p>
+<p>A side project, not a product.</p>
 <p>The tools run entirely in your browser. Nothing you open in them is uploaded anywhere, there is no account, and there is no analytics — each of them ships a content security policy that stops the page making a network request at all, which you can check in your browser's network tab.</p>
 <p class="caveat">None of it is legal advice, and the reproduced legislation is unofficial. For anything that matters, confirm the current provision at the <a href="https://www.legislation.act.gov.au/">ACT legislation register</a>.</p>
 </section>
