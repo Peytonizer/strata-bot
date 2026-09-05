@@ -498,9 +498,11 @@ def build_hub(manifest, nav):
         chip = "" if status == "live" else f'<span class="chip chip-{html.escape(status)}">{html.escape(status)}</span>'
         heading = html.escape(project["name"])
         link_open, link_close = (f'<a href="{html.escape(project["url"])}">', "</a>") if status != "planned" else ("", "")
+        # The circle-and-chord mark is noradz's own — reused here, in currentColor, as the
+        # button that sends you out to the parent domain's subdomains.
         visit = "" if status == "planned" else f"""<a class="card-visit" href="{html.escape(project["url"])}">
 Open
-<svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="13" r="6" stroke="currentColor" stroke-width="1.8"/><path d="M7.13 9.5L16.87 9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
 </a>"""
         cards.append(f"""<li class="card card-{html.escape(project["id"])}">
 <h2>{link_open}{heading}{link_close}{chip}</h2>
@@ -797,13 +799,12 @@ body::before {
 }
 
 .card {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-soft);
-  padding: 22px;
+  padding: 22px 22px 60px;
   /* The macaron edge is what distinguishes one card from the next at a glance; it is a
      surface, never a text colour, which is the rule that keeps the pastel palette readable. */
   border-top: 4px solid var(--border-strong);
@@ -840,8 +841,12 @@ body::before {
 .card-blurb { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
 
 .card-visit {
-  align-self: flex-end;
-  margin-top: 16px;
+  /* Absolute against the tile itself, not the text flow — so it lands in the same corner of
+     every card regardless of blurb length, and doesn't depend on flexbox stretch behaviour
+     that some browsers (Safari included) get wrong on a grid item. */
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
   display: inline-flex;
   align-items: center;
   gap: 5px;

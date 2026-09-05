@@ -366,13 +366,12 @@ body::before {
 }
 
 .card {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-soft);
-  padding: 22px;
+  padding: 22px 22px 60px;
   /* The macaron edge is what distinguishes one card from the next at a glance; it is a
      surface, never a text colour, which is the rule that keeps the pastel palette readable. */
   border-top: 4px solid var(--border-strong);
@@ -409,8 +408,12 @@ body::before {
 .card-blurb { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
 
 .card-visit {
-  align-self: flex-end;
-  margin-top: 16px;
+  /* Absolute against the tile itself, not the text flow — so it lands in the same corner of
+     every card regardless of blurb length, and doesn't depend on flexbox stretch behaviour
+     that some browsers (Safari included) get wrong on a grid item. */
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
