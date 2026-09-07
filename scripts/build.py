@@ -813,6 +813,7 @@ body::before {
 .card-legislation { border-top-color: var(--lavender); }
 .card-lodger { border-top-color: var(--rose); }
 .card-former { border-top-color: var(--bleuet); }
+.card-noshow { border-top-color: var(--pistachio); }
 
 .card h2 {
   margin: 0 0 8px;
@@ -866,6 +867,7 @@ body::before {
 .card-legislation .card-visit { background: var(--lavender); }
 .card-lodger .card-visit { background: var(--rose); }
 .card-former .card-visit { background: var(--bleuet); }
+.card-noshow .card-visit { background: var(--pistachio); }
 .card-visit svg { flex: none; }
 .card-visit:hover { box-shadow: var(--shadow-lift); transform: translate(1px, -1px); }
 .card-visit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
