@@ -380,6 +380,7 @@ body::before {
 .card-lodger { border-top-color: var(--rose); }
 .card-former { border-top-color: var(--bleuet); }
 .card-noshow { border-top-color: var(--pistachio); }
+.card-stencil { border-top-color: var(--caramel); }
 
 .card h2 {
   margin: 0 0 8px;
@@ -434,6 +435,7 @@ body::before {
 .card-lodger .card-visit { background: var(--rose); }
 .card-former .card-visit { background: var(--bleuet); }
 .card-noshow .card-visit { background: var(--pistachio); }
+.card-stencil .card-visit { background: var(--caramel); }
 .card-visit svg { flex: none; }
 .card-visit:hover { box-shadow: var(--shadow-lift); transform: translate(1px, -1px); }
 .card-visit:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
