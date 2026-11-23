@@ -5,6 +5,7 @@ version headings are cut when a meaningful chunk of work lands, not on every com
 
 ## Unreleased
 
+- Reworded the forecast card for the Overview sheet.
 - Added forecast (maintenance forecast workbooks) to the hub and the family bar, with a lemon card.
 - Picked up the kit's per-theme icon support in the theme toggle.
 
