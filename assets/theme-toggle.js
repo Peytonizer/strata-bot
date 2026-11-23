@@ -35,6 +35,13 @@ function apply(theme, buttons) {
     button.setAttribute('aria-pressed', String(theme === 'dark'));
     const label = button.querySelector('[data-theme-label]');
     if (label) label.textContent = theme === 'dark' ? 'Dark' : 'Light';
+    // A button may carry one icon per theme, `[data-theme-icon="light"]` and `[data-theme-icon="dark"]`;
+    // the one matching the current theme is shown, in step with the label. `style.display` rather
+    // than `hidden`, because the `hidden` attribute doesn't reliably hide an inline <svg>. A button
+    // with no such icons is untouched, so existing markup keeps working.
+    for (const icon of button.querySelectorAll('[data-theme-icon]')) {
+      icon.style.display = icon.dataset.themeIcon === theme ? '' : 'none';
+    }
   }
 }
 

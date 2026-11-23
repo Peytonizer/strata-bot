@@ -5,6 +5,9 @@ version headings are cut when a meaningful chunk of work lands, not on every com
 
 ## Unreleased
 
+- Added forecast (maintenance forecast workbooks) to the hub and the family bar, with a lemon card.
+- Picked up the kit's per-theme icon support in the theme toggle.
+
 ## 1.0.0 — 2026-11-16
 
 The first cut version, covering everything since the site went up. The history before this
